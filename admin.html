@@ -90,7 +90,19 @@ button{cursor:pointer;border:none;border-radius:10px;font-size:19px;padding:12px
     <div id="list"></div>
     <label>Nombre del archivo a descargar</label>
     <input type="text" id="fileName" placeholder="Ej: preguntas-maria-1">
-    <button class="btn-secondary" id="exportBtn">⬇️ Exportar archivo</button>
+    <button class="btn-primary" id="publishBtn" style="display:none">☁️ Publicar en el juego (GitHub)</button>
+    <div class="status" id="pubStatus"></div>
+    <button class="btn-secondary" id="exportBtn">⬇️ Descargar archivo (para enviar a Edu)</button>
+  </div>
+  <div class="card" id="ghCard" style="display:none">
+    <b>☁️ GitHub (solo para Edu)</b>
+    <div class="status" id="ghState"></div>
+    <label>Token de GitHub (solo se guarda en este móvil)</label>
+    <input type="password" id="ghToken" placeholder="github_pat_…" autocomplete="off">
+    <button class="btn-primary" id="ghSaveToken" style="margin-top:10px">Guardar token</button>
+    <button class="btn-secondary" id="ghForget" style="background:#e0455a">Olvidar token</button>
+    <button class="btn-secondary" id="ghLoad" style="background:var(--accent2)">⬇️ Cargar en la lista las preguntas ya publicadas</button>
+    <div class="status" id="ghLoadStatus"></div>
   </div>
 </div>
 
@@ -174,7 +186,7 @@ function renderList(){
   list.innerHTML = questions.map((item,idx)=>`
     <div class="item">
       <img src="${item.photoUrl}">
-      <div class="meta">${esc(item.q)}${item.author?`<br><span style="color:var(--muted);font-size:11px;">de ${esc(item.author)}</span>`:''}<br><span style="color:var(--accent2);font-size:15px;">${esc(CATS[item.cat]||'Sin categoría')}</span></div>
+      <div class="meta">${esc(item.q)}${item.author?`<br><span style="color:var(--muted);font-size:11px;">de ${esc(item.author)}</span>`:''}<br><span style="color:var(--accent2);font-size:15px;">${esc(CATS[item.cat]||'Sin categoría')}${item.fromRepo?' · ya publicada':''}</span></div>
       <button class="edit" data-idx="${idx}" style="background:var(--accent);color:#fff;padding:8px 12px;font-size:15px;border-radius:8px;border:none;margin-right:4px;">Editar</button>
       <button class="del" data-idx="${idx}">Quitar</button>
     </div>
@@ -238,17 +250,18 @@ const fileNameInput=document.getElementById('fileName');
 function refreshDefaultFileName(){
   if(fileNameInput.value.trim()) return; // don't overwrite something the user already typed
   const author=document.getElementById('authorName').value.trim();
-  const base = author ? `ollotrivial-${author.toLowerCase().replace(/[^a-z0-9]+/gi,'-')}` : 'ollotrivial-preguntas';
-  fileNameInput.placeholder = `${base}-${defaultStamp()}`;
+  const slug = author ? author.toLowerCase().replace(/[^a-z0-9]+/gi,'-') : 'preguntas';
+  const d=new Date(), p=n=>String(n).padStart(2,'0');
+  fileNameInput.placeholder = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}-${slug}`;
 }
 document.getElementById('authorName').addEventListener('input', refreshDefaultFileName);
 refreshDefaultFileName();
 
 document.getElementById('exportBtn').onclick=()=>{
   if(!questions.length){ document.getElementById('status').textContent='Añade alguna pregunta primero.'; return; }
-  const blob=new Blob([JSON.stringify(questions,null,2)], {type:'application/json'});
+  const blob=new Blob([JSON.stringify(questions.filter(x=>!x.fromRepo),null,2)], {type:'application/json'});
   const url=URL.createObjectURL(blob);
-  let name=fileNameInput.value.trim() || fileNameInput.placeholder || `ollotrivial-preguntas-${defaultStamp()}`;
+  let name=fileNameInput.value.trim() || fileNameInput.placeholder || `preguntas-${defaultStamp()}`;
   name=name.replace(/[^a-z0-9_\-]+/gi,'-').replace(/^-+|-+$/g,'');
   if(!/\.json$/i.test(name)) name+='.json';
   const a=document.createElement('a');
@@ -278,6 +291,81 @@ window.addEventListener('appinstalled', ()=>{ installBtn.style.display='none'; }
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('admin-sw.js').catch(()=>{});
 }
+
+// ===== GitHub: publicar y cargar =====
+const GH_KEY='ollotrivial_gh_token';
+function ghRepo(){ if(!/github\.io$/.test(location.hostname)) return null; const repo=location.pathname.split('/')[1]; return repo?{owner:location.hostname.split('.')[0],repo}:null; }
+function getTok(){ try{ return localStorage.getItem(GH_KEY)||''; }catch(e){ return ''; } }
+function refreshGh(){
+  const t=getTok();
+  document.getElementById('publishBtn').style.display = t ? 'block' : 'none';
+  document.getElementById('ghState').textContent = !ghRepo() ? 'Solo funciona desde la dirección de GitHub Pages.' : (t ? '✅ Token guardado: puedes publicar y cargar.' : 'Sin token: solo puedes descargar el archivo.');
+}
+document.getElementById('ghSaveToken').onclick=()=>{
+  const v=document.getElementById('ghToken').value.trim();
+  if(!v){ document.getElementById('ghState').textContent='Pega primero el token.'; return; }
+  try{ localStorage.setItem(GH_KEY,v); }catch(e){ document.getElementById('ghState').textContent='Este navegador no permite guardar el token.'; return; }
+  document.getElementById('ghToken').value=''; refreshGh();
+};
+document.getElementById('ghForget').onclick=()=>{ try{ localStorage.removeItem(GH_KEY); }catch(e){} refreshGh(); };
+refreshGh();
+if(location.hash==='#admin' || getTok()) document.getElementById('ghCard').style.display='block';
+
+async function ghApi(path, opts){
+  const g=ghRepo(); const t=getTok();
+  const headers=Object.assign({'Accept':'application/vnd.github+json'}, t?{'Authorization':'Bearer '+t}:{}, (opts&&opts.headers)||{});
+  return fetch(`https://api.github.com/repos/${g.owner}/${g.repo}/contents/${path}`, Object.assign({cache:'no-store'}, opts||{}, {headers}));
+}
+function blobToB64(blob){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(',')[1]); fr.onerror=rej; fr.readAsDataURL(blob); }); }
+
+document.getElementById('publishBtn').onclick=async()=>{
+  const st=document.getElementById('pubStatus');
+  const mine=questions.filter(x=>!x.fromRepo);
+  if(!mine.length){ st.textContent='Añade alguna pregunta nueva primero.'; return; }
+  if(!ghRepo()){ st.textContent='Abre la app desde la dirección de GitHub Pages.'; return; }
+  let name=fileNameInput.value.trim() || fileNameInput.placeholder;
+  name=name.replace(/[^a-z0-9_\-]+/gi,'-').replace(/^-+|-+$/g,'');
+  if(!/\.json$/i.test(name)) name+='.json';
+  st.textContent='Publicando…';
+  try{
+    const content=await blobToB64(new Blob([JSON.stringify(mine,null,2)],{type:'application/json'}));
+    const r=await ghApi('preguntas/'+encodeURIComponent(name),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:'Preguntas: '+name,content})});
+    if(r.ok){
+      st.textContent='✅ Publicadas '+mine.length+' pregunta(s) en preguntas/'+name+'. Saldrán en el juego en 1-2 minutos.';
+      mine.forEach(x=>x.fromRepo=true); renderList();
+      fileNameInput.value=''; refreshDefaultFileName();
+    } else if(r.status===401||r.status===403){ st.textContent='GitHub rechazó el token (caducado o sin permisos). Crea uno nuevo.'; }
+    else if(r.status===422){ st.textContent='Ya existe un archivo con ese nombre. Cámbialo y vuelve a publicar.'; }
+    else { st.textContent='Error de GitHub ('+r.status+').'; }
+  }catch(e){ st.textContent='No se pudo conectar. Revisa tu internet.'; }
+};
+
+document.getElementById('ghLoad').onclick=async()=>{
+  const st=document.getElementById('ghLoadStatus');
+  if(!ghRepo()){ st.textContent='Abre la app desde la dirección de GitHub Pages.'; return; }
+  st.textContent='Cargando…';
+  try{
+    const r=await ghApi('preguntas?ref=main');
+    if(!r.ok){ st.textContent = r.status===404 ? 'Todavía no hay carpeta de preguntas publicada.' : 'Error de GitHub ('+r.status+').'; return; }
+    const files=(await r.json()).filter(f=>f.type==='file' && /\.json$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name));
+    const seen=new Set(questions.map(x=>x.q.trim().toLowerCase()));
+    let added=0;
+    for(const f of files){
+      try{
+        const d=await (await fetch(f.download_url+'?v='+Date.now(),{cache:'no-store'})).json();
+        for(const item of (Array.isArray(d)?d:[d])){
+          if(item && typeof item.q==='string' && Array.isArray(item.opts) && item.opts.length===4 && item.photoUrl && !seen.has(item.q.trim().toLowerCase())){
+            seen.add(item.q.trim().toLowerCase());
+            questions.push({q:item.q,opts:item.opts,correct:item.correct|0,photoUrl:item.photoUrl,ts:item.ts||Date.now(),author:item.author||'',cat:CATS[item.cat]?item.cat:'',fromRepo:true});
+            added++;
+          }
+        }
+      }catch(e){}
+    }
+    st.textContent='Cargadas '+added+' pregunta(s) de '+files.length+' archivo(s).';
+    renderList();
+  }catch(e){ st.textContent='No se pudo conectar.'; }
+};
 </script>
 </body>
 </html>
