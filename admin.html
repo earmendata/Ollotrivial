@@ -15,22 +15,22 @@
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:20px;}
 .wrap{max-width:520px;margin:0 auto;}
-h1{font-size:22px;margin-bottom:4px;}
-p.sub{color:var(--muted);font-size:14px;margin-top:0;}
+h1{font-size:28px;margin-bottom:4px;}
+p.sub{color:var(--muted);font-size:18px;margin-top:0;}
 .card{background:var(--card);border-radius:16px;padding:20px;margin-bottom:18px;box-shadow:0 4px 16px #0000000f;}
-label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px;}
-input[type=text],input[type=file],select{width:100%;padding:10px;border-radius:10px;border:1px solid #00000022;font-size:15px;background:#fff;color:var(--text);}
+label{display:block;font-size:17px;color:var(--muted);margin:12px 0 4px;}
+input[type=text],input[type=file],select{width:100%;padding:12px;border-radius:10px;border:1px solid #00000022;font-size:19px;background:#fff;color:var(--text);}
 .photo-label{display:block;padding:16px;border:2px dashed var(--muted);border-radius:12px;text-align:center;cursor:pointer;}
 img.preview{width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-top:10px;display:none;}
-button{cursor:pointer;border:none;border-radius:10px;font-size:15px;padding:12px 18px;}
+button{cursor:pointer;border:none;border-radius:10px;font-size:19px;padding:12px 18px;}
 .btn-primary{background:var(--accent2);color:#fff;width:100%;margin-top:16px;}
 .btn-secondary{background:#25D366;color:#fff;width:100%;margin-top:10px;}
 .item{display:flex;gap:10px;align-items:center;padding:10px;border-bottom:1px solid #0000000f;}
 .item img{width:50px;height:50px;object-fit:cover;border-radius:8px;flex-shrink:0;}
-.item .meta{flex:1;font-size:13px;}
-.item .del{background:#e0455a;color:#fff;padding:6px 10px;font-size:12px;}
-.status{font-size:13px;color:var(--muted);margin-top:8px;min-height:16px;}
-.count{font-size:13px;color:var(--muted);}
+.item .meta{flex:1;font-size:17px;}
+.item .del{background:#e0455a;color:#fff;padding:8px 12px;font-size:15px;}
+.status{font-size:16px;color:var(--muted);margin-top:8px;min-height:16px;}
+.count{font-size:16px;color:var(--muted);}
 </style>
 </head>
 <body>
@@ -45,7 +45,7 @@ button{cursor:pointer;border:none;border-radius:10px;font-size:15px;padding:12px
 
     <label>Foto</label>
     <label class="photo-label" for="photo" id="photoLabel">📷 Toca para elegir una foto</label>
-    <input type="file" accept="image/*" id="photo">
+    <input type="file"  id="photo">
     <img class="preview" id="preview">
 
     <label>Pregunta</label>
@@ -55,6 +55,16 @@ button{cursor:pointer;border:none;border-radius:10px;font-size:15px;padding:12px
     <label>Respuesta 2</label><input type="text" id="opt1" placeholder="Opción 2">
     <label>Respuesta 3</label><input type="text" id="opt2" placeholder="Opción 3">
     <label>Respuesta 4</label><input type="text" id="opt3" placeholder="Opción 4">
+
+    <label>Categoría</label>
+    <select id="cat">
+      <option value="">— Elige una categoría —</option>
+      <option value="historia">Historia</option>
+      <option value="geografia">Geografía</option>
+      <option value="flora">Flora</option>
+      <option value="fauna">Fauna</option>
+      <option value="arte">Arte</option>
+    </select>
 
     <label>¿Cuál es la correcta?</label>
     <select id="correct">
@@ -71,7 +81,7 @@ button{cursor:pointer;border:none;border-radius:10px;font-size:15px;padding:12px
   <div class="card">
     <label>Importar archivo(s) de otros editores</label>
     <label class="photo-label" for="importFile" id="importLabel">📂 Toca para elegir uno o varios .json</label>
-    <input type="file" accept=".json,application/json" id="importFile" multiple>
+    <input type="file"  id="importFile" multiple>
     <div class="status" id="importStatus"></div>
   </div>
 
@@ -86,6 +96,10 @@ button{cursor:pointer;border:none;border-radius:10px;font-size:15px;padding:12px
 
 <script>
 let questions = [];
+const CATS={historia:'Historia',geografia:'Geografía',flora:'Flora',fauna:'Fauna',arte:'Arte'};
+const catSel=document.getElementById('cat');
+try{ const saved=localStorage.getItem('ollotrivial_lastcat'); if(saved && CATS[saved]) catSel.value=saved; }catch(e){}
+catSel.addEventListener('change',()=>{ try{ localStorage.setItem('ollotrivial_lastcat',catSel.value); }catch(e){} });
 
 function fileToCompressedDataUrl(file){
   return new Promise((resolve,reject)=>{
@@ -140,8 +154,10 @@ document.getElementById('addBtn').onclick=()=>{
     status.textContent='Rellena la foto, la pregunta y las 4 respuestas.';
     return;
   }
+  const cat=document.getElementById('cat').value;
+  if(!cat){ status.textContent='Elige una categoría.'; return; }
   const author=document.getElementById('authorName').value.trim();
-  questions.push({q:qtext, opts, correct, photoUrl:currentDataUrl, ts:Date.now(), author});
+  questions.push({q:qtext, opts, correct, cat, photoUrl:currentDataUrl, ts:Date.now(), author});
   status.textContent='¡Añadida a la lista!';
   document.getElementById('qtext').value='';
   [0,1,2,3].forEach(i=>document.getElementById('opt'+i).value='');
@@ -158,8 +174,8 @@ function renderList(){
   list.innerHTML = questions.map((item,idx)=>`
     <div class="item">
       <img src="${item.photoUrl}">
-      <div class="meta">${esc(item.q)}${item.author?`<br><span style="color:var(--muted);font-size:11px;">de ${esc(item.author)}</span>`:''}</div>
-      <button class="edit" data-idx="${idx}" style="background:var(--accent);color:#fff;padding:6px 10px;font-size:12px;border-radius:8px;border:none;margin-right:4px;">Editar</button>
+      <div class="meta">${esc(item.q)}${item.author?`<br><span style="color:var(--muted);font-size:11px;">de ${esc(item.author)}</span>`:''}<br><span style="color:var(--accent2);font-size:15px;">${esc(CATS[item.cat]||'Sin categoría')}</span></div>
+      <button class="edit" data-idx="${idx}" style="background:var(--accent);color:#fff;padding:8px 12px;font-size:15px;border-radius:8px;border:none;margin-right:4px;">Editar</button>
       <button class="del" data-idx="${idx}">Quitar</button>
     </div>
   `).join('');
@@ -173,6 +189,7 @@ function renderList(){
       document.getElementById('qtext').value=item.q;
       [0,1,2,3].forEach(i=>document.getElementById('opt'+i).value=item.opts[i]||'');
       document.getElementById('correct').value=item.correct;
+      document.getElementById('cat').value=item.cat||'';
       document.getElementById('authorName').value=item.author||'';
       currentDataUrl=item.photoUrl;
       preview.src=item.photoUrl;
@@ -198,7 +215,7 @@ document.getElementById('importFile').addEventListener('change', async ()=>{
       const arr=Array.isArray(data)?data:[data];
       for(const item of arr){
         if(item && typeof item.q==='string' && Array.isArray(item.opts) && item.opts.length===4 && item.photoUrl){
-          questions.push({q:item.q, opts:item.opts, correct:item.correct|0, photoUrl:item.photoUrl, ts:item.ts||Date.now(), author:item.author||''});
+          questions.push({q:item.q, opts:item.opts, correct:item.correct|0, photoUrl:item.photoUrl, ts:item.ts||Date.now(), author:item.author||'', cat:CATS[item.cat]?item.cat:''});
           added++;
         } else {
           skipped++;
