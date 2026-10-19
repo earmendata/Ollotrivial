@@ -189,6 +189,7 @@ document.getElementById('addBtn').onclick=()=>{
 function esc(s){ return (s+'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function renderList(){
+  try{ refreshDefaultFileName(); }catch(e){}
   document.getElementById('count').textContent = questions.length + (questions.length===1 ? ' pregunta en la lista' : ' preguntas en la lista');
   const list=document.getElementById('list');
   list.innerHTML = questions.map((item,idx)=>`
@@ -255,12 +256,16 @@ function defaultStamp(){
 }
 
 const fileNameInput=document.getElementById('fileName');
+function slugify(t){ return (t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
 function refreshDefaultFileName(){
-  if(fileNameInput.value.trim()) return; // don't overwrite something the user already typed
-  const author=document.getElementById('authorName').value.trim();
-  const slug = author ? author.toLowerCase().replace(/[^a-z0-9]+/gi,'-') : 'preguntas';
+  if(fileNameInput.value.trim()) return; // no pisar lo que haya escrito el usuario
   const d=new Date(), p=n=>String(n).padStart(2,'0');
-  fileNameInput.placeholder = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}-${slug}`;
+  const date=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  const mine=questions.filter(x=>!x.fromRepo);
+  const last=mine[mine.length-1];
+  const ans = last ? slugify(last.opts[last.correct]) : '';
+  const author=slugify(document.getElementById('authorName').value);
+  fileNameInput.placeholder = [date, ans, author].filter(Boolean).join('-');
 }
 document.getElementById('authorName').addEventListener('input', refreshDefaultFileName);
 refreshDefaultFileName();
