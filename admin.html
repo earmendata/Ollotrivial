@@ -44,8 +44,15 @@ button{cursor:pointer;border:none;border-radius:10px;font-size:19px;padding:12px
     <input type="text" id="authorName" placeholder="Ej: Edu, María, Jon…">
 
     <label>Foto</label>
-    <label class="photo-label" for="photo" id="photoLabel">📷 Toca para elegir una foto</label>
-    <input type="file"  id="photo">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <label class="photo-label" for="photoCam" style="flex:1;min-width:30%;padding:12px 6px;">📷<br>Hacer foto</label>
+      <label class="photo-label" for="photoGal" style="flex:1;min-width:30%;padding:12px 6px;">🖼️<br>Galería</label>
+      <label class="photo-label" for="photo" style="flex:1;min-width:30%;padding:12px 6px;">📁<br>Archivos</label>
+    </div>
+    <input type="file" id="photoCam" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="photoGal" accept="image/*" style="display:none">
+    <input type="file" id="photo" style="display:none">
+    <div id="photoLabel" style="margin-top:8px;font-size:16px;color:var(--muted);">Elige una foto con una de las tres opciones</div>
     <img class="preview" id="preview">
 
     <label>Pregunta</label>
@@ -142,8 +149,8 @@ const photoLabel=document.getElementById('photoLabel');
 const preview=document.getElementById('preview');
 let currentDataUrl=null;
 
-photoInput.addEventListener('change', async ()=>{
-  const f=photoInput.files[0];
+[photoInput, document.getElementById('photoCam'), document.getElementById('photoGal')].forEach(inp=>inp.addEventListener('change', async ()=>{
+  const f=inp.files[0];
   if(!f) return;
   photoLabel.textContent='Procesando…';
   try{
@@ -155,7 +162,8 @@ photoInput.addEventListener('change', async ()=>{
     photoLabel.textContent='No se pudo leer la foto, prueba otra';
     currentDataUrl=null;
   }
-});
+  inp.value='';
+}));
 
 document.getElementById('addBtn').onclick=()=>{
   const status=document.getElementById('status');
@@ -174,7 +182,7 @@ document.getElementById('addBtn').onclick=()=>{
   document.getElementById('qtext').value='';
   [0,1,2,3].forEach(i=>document.getElementById('opt'+i).value='');
   photoInput.value=''; currentDataUrl=null; preview.style.display='none';
-  photoLabel.textContent='📷 Toca para elegir una foto';
+  photoLabel.textContent='Elige una foto con una de las tres opciones';
   renderList();
 };
 
